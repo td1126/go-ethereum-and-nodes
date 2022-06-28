@@ -57,6 +57,7 @@ const (
 )
 
 // protoHandshake is the RLP structure of the protocol handshake.
+// protoHandshake 是协议握手的 RLP 结构。
 type protoHandshake struct {
 	Version    uint64
 	Name       string
@@ -69,6 +70,7 @@ type protoHandshake struct {
 }
 
 // PeerEventType is the type of peer events emitted by a p2p.Server
+// PeerEventType 是 p2p.Server 发出的对等事件的类型
 type PeerEventType string
 
 const (
@@ -78,6 +80,7 @@ const (
 
 	// PeerEventTypeDrop is the type of event emitted when a peer is
 	// dropped from a p2p.Server
+	// PeerEventTypeDrop 是从 p2p.Server 删除对等点时发出的事件类型
 	PeerEventTypeDrop PeerEventType = "drop"
 
 	// PeerEventTypeMsgSend is the type of event emitted when a
@@ -91,6 +94,7 @@ const (
 
 // PeerEvent is an event emitted when peers are either added or dropped from
 // a p2p.Server or when a message is sent or received on a peer connection
+// PeerEvent 是从 p2p.Server 添加或删除对等点或在对等连接上发送或接收消息时发出的事件
 type PeerEvent struct {
 	Type          PeerEventType `json:"type"`
 	Peer          enode.ID      `json:"peer"`
@@ -103,6 +107,7 @@ type PeerEvent struct {
 }
 
 // Peer represents a connected remote node.
+// Peer 代表一个连接的远程节点。
 type Peer struct {
 	rw      *conn
 	running map[string]*protoRW
@@ -120,6 +125,7 @@ type Peer struct {
 }
 
 // NewPeer returns a peer for testing purposes.
+// NewPeer 返回一个 Peer 用于测试目的。
 func NewPeer(id enode.ID, name string, caps []Cap) *Peer {
 	// Generate a fake set of local protocols to match as running caps. Almost
 	// no fields needs to be meaningful here as we're only using it to cross-
@@ -140,6 +146,8 @@ func NewPeer(id enode.ID, name string, caps []Cap) *Peer {
 // NewPeerPipe creates a peer for testing purposes.
 // The message pipe given as the last parameter is closed when
 // Disconnect is called on the peer.
+// NewPeerPipe 为测试目的创建一个对等点。
+// 当对等体调用 Disconnect 时，作为最后一个参数给出的消息管道将关闭。
 func NewPeerPipe(id enode.ID, name string, caps []Cap, pipe *MsgPipeRW) *Peer {
 	p := NewPeer(id, name, caps)
 	p.testPipe = pipe
@@ -157,6 +165,7 @@ func (p *Peer) Node() *enode.Node {
 }
 
 // Name returns an abbreviated form of the name
+// Name 返回名称的缩写形式
 func (p *Peer) Name() string {
 	s := p.rw.name
 	if len(s) > 20 {
@@ -171,6 +180,7 @@ func (p *Peer) Fullname() string {
 }
 
 // Caps returns the capabilities (supported subprotocols) of the remote peer.
+// Caps 返回远程对等点的能力（支持的子协议）。
 func (p *Peer) Caps() []Cap {
 	// TODO: maybe return copy
 	return p.rw.caps
@@ -179,6 +189,7 @@ func (p *Peer) Caps() []Cap {
 // RunningCap returns true if the peer is actively connected using any of the
 // enumerated versions of a specific protocol, meaning that at least one of the
 // versions is supported by both this node and the peer p.
+// 如果对等点使用特定协议的任何枚举版本主动连接，RunningCap 返回 true，这意味着该节点和对等点 p 都支持至少一个版本。
 func (p *Peer) RunningCap(protocol string, versions []uint) bool {
 	if proto, ok := p.running[protocol]; ok {
 		for _, ver := range versions {
@@ -202,6 +213,8 @@ func (p *Peer) LocalAddr() net.Addr {
 
 // Disconnect terminates the peer connection with the given reason.
 // It returns immediately and does not wait until the connection is closed.
+// Disconnect 以给定的原因终止对等连接。
+// 立即返回，不等到连接关闭。
 func (p *Peer) Disconnect(reason DiscReason) {
 	if p.testPipe != nil {
 		p.testPipe.Close()
@@ -220,6 +233,7 @@ func (p *Peer) String() string {
 }
 
 // Inbound returns true if the peer is an inbound connection
+// 如果对等方是入站连接，则入站返回 true
 func (p *Peer) Inbound() bool {
 	return p.rw.is(inboundConn)
 }
@@ -334,14 +348,17 @@ func (p *Peer) handle(msg Msg) error {
 	case msg.Code == discMsg:
 		// This is the last message. We don't need to discard or
 		// check errors because, the connection will be closed after it.
+		// 这是最后一条消息。我们不需要丢弃或检查错误，因为在此之后连接将被关闭。
 		var m struct{ R DiscReason }
 		rlp.Decode(msg.Payload, &m)
 		return m.R
 	case msg.Code < baseProtocolLength:
 		// ignore other base protocol messages
+		// 忽略其他基本协议消息
 		return msg.Discard()
 	default:
 		// it's a subprotocol message
+		// 这是一个子协议消息
 		proto, err := p.getProto(msg.Code)
 		if err != nil {
 			return fmt.Errorf("msg code out of range: %v", msg.Code)
@@ -374,6 +391,7 @@ func countMatchingProtocols(protocols []Protocol, caps []Cap) int {
 }
 
 // matchProtocols creates structures for matching named subprotocols.
+// matchProtocols 创建用于匹配命名子协议的结构。
 func matchProtocols(protocols []Protocol, caps []Cap, rw MsgReadWriter) map[string]*protoRW {
 	sort.Sort(capsByNameAndVersion(caps))
 	offset := baseProtocolLength
@@ -426,6 +444,7 @@ func (p *Peer) startProtocols(writeStart <-chan struct{}, writeErr chan<- error)
 
 // getProto finds the protocol responsible for handling
 // the given message code.
+// getProto 找到负责处理给定消息代码的协议。
 func (p *Peer) getProto(code uint64) (*protoRW, error) {
 	for _, proto := range p.running {
 		if code >= proto.offset && code < proto.offset+proto.Length {
@@ -461,6 +480,9 @@ func (rw *protoRW) WriteMsg(msg Msg) (err error) {
 		// shutdown if the error is non-nil and unblock the next write
 		// otherwise. The calling protocol code should exit for errors
 		// as well but we don't want to rely on that.
+		// 将写入状态报告回 Peer.run。
+		// 如果错误不为零，它将启动关闭，否则将取消阻止下一次写入。
+		// 调用协议代码也应该退出错误，但我们不想依赖它。
 		rw.werr <- err
 	case <-rw.closed:
 		err = ErrShuttingDown
@@ -481,6 +503,8 @@ func (rw *protoRW) ReadMsg() (Msg, error) {
 // PeerInfo represents a short summary of the information known about a connected
 // peer. Sub-protocol independent fields are contained and initialized here, with
 // protocol specifics delegated to all connected sub-protocols.
+// PeerInfo 表示有关已连接对等点的已知信息的简短摘要。
+// 子协议独立字段包含并在这里初始化，协议细节委托给所有连接的子协议。
 type PeerInfo struct {
 	ENR     string   `json:"enr,omitempty"` // Ethereum Node Record
 	Enode   string   `json:"enode"`         // Node URL
@@ -498,13 +522,16 @@ type PeerInfo struct {
 }
 
 // Info gathers and returns a collection of metadata known about a peer.
+// Info 收集并返回已知的关于对等点的元数据集合。
 func (p *Peer) Info() *PeerInfo {
 	// Gather the protocol capabilities
+	// 收集协议能力
 	var caps []string
 	for _, cap := range p.Caps() {
 		caps = append(caps, cap.String())
 	}
 	// Assemble the generic peer metadata
+	// 组装通用对等元数据
 	info := &PeerInfo{
 		Enode:     p.Node().URLv4(),
 		ID:        p.ID().String(),
@@ -522,6 +549,7 @@ func (p *Peer) Info() *PeerInfo {
 	info.Network.Static = p.rw.is(staticDialedConn)
 
 	// Gather all the running protocol infos
+	// 收集所有正在运行的协议信息
 	for _, proto := range p.running {
 		protoInfo := interface{}("unknown")
 		if query := proto.Protocol.PeerInfo; query != nil {
